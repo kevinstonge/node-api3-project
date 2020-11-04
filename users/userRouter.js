@@ -1,9 +1,8 @@
 const express = require('express');
 
 const router = express.Router();
-router.use(express.json());
 const user = require('./userDb.js');
-
+const post = require('../posts/postDb.js');
 router.use('/:id', validateUserId);
 
 router.post('/', validateUser, (req, res) => {
@@ -19,34 +18,56 @@ router.post('/', validateUser, (req, res) => {
     })
 });
 
-router.post('/:id/posts', (req, res) => {
-  console.log('post to user by id');
-  res.status(200).json({message:"hello"})
+router.post('/:id/posts', validatePost, (req, res) => {
+  post.insert(req.body).then(r => {
+    res.status(200).json({
+      message: "post created",
+      post: r
+    });
+  }).catch(e=>res.status(500).json({message: "server error: unable to create post"}))
 });
 
 router.get('/', (req, res) => {
-  console.log('get users');
+  user.get().then(r => {
+    res.status(200).json({ messsage: "got user list", users: r });  
+  }).catch(e => {
+    res.status(500).json({message: "server error: unable to get user list"})
+  })
 });
 
 router.get('/:id', (req, res) => {
-  console.log('get user by id');
-  res.status(200).json({ message: "get user by id" });
+  user.getById(req.params.id).then(r=>{
+    res.status(200).json({
+      message: "got user by id",
+      user: r
+    });
+  }).catch(e => {
+    res.status(500).json({message: "error retrieving user information"})
+  })
 });
 
 router.get('/:id/posts', (req, res) => {
-  console.log('get posts by user id');
-  res.status(200).json({
-    message: "get posts by user id",
-    user: req.user
-  });
+  user.getUserPosts(req.params.id).then(r => {
+    res.status(200).json({
+      message: "get posts by user id",
+      posts: r
+    })
+  })
+    .catch(e => {
+    res.status(500).json({message: "error retrieving user's posts"})
+  })
 });
 
 router.delete('/:id', (req, res) => {
-  console.log('delete user by id')
+  user.remove(req.params.id).then(r => {
+    res.status(200).json({message: "deleted user"}).catch(e=>res.status(500).json({message: "server error: unable to delete user"}))
+  })
 });
 
 router.put('/:id', (req, res) => {
-  console.log('update user by id')
+  user.update(req.params.id, req.body).then(r => {
+    res.status(200).json({message: "user updated", user: r}).catch(e=>res.status(500).json({message: "server error: unable to update user"}))
+  })
 });
 
 //custom middleware
@@ -88,8 +109,23 @@ function validateUser(req, res, next) {
   }
 }
 
-function validatePost(req, res, next) {
-  // do your magic!
+ 
+function validatePost (req, res, next) {
+  if (req.body) {
+    if (req.body.text) {
+      const minLength = 5;
+      if (req.body.text.length >= minLength) {
+        req.body.user_id = req.params.id;
+        next();
+      } else {
+        res.status(400).json({message: `bad request: text must contain at least ${minLength} characters`})
+      }
+    } else {
+      res.status(400).json({message: "bad request: missing post text"})
+    }
+  } else {
+    res.status(400).json({message: "bad request: missing post data"})
+  }
 }
 
 module.exports = router;
